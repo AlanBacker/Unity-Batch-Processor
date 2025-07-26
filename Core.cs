@@ -13,7 +13,6 @@ public class BatchProcessorWindow : EditorWindow
     private SerializedProperty sourceObjectsProperty;
     private SerializedProperty targetObjectsProperty;
 
-    // [新功能] 添加滚动视图位置变量
     private Vector2 scrollPosition;
 
     // --- 多语言支持 ---
@@ -62,12 +61,10 @@ public class BatchProcessorWindow : EditorWindow
     {
         serializedObject.Update();
 
-        DrawLanguageButtons(); // 语言按钮保持在顶部，不参与滚动
+        DrawLanguageButtons();
 
         EditorGUILayout.Space(10);
-
-        // [新功能] 开始滚动视图区域
-        // 所有后续的UI元素都将包含在这个可滚动区域内
+        
         scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
 
         EditorGUILayout.LabelField(currentTexts.SourceObjectLabel, EditorStyles.boldLabel);
@@ -91,7 +88,6 @@ public class BatchProcessorWindow : EditorWindow
 
         EditorGUILayout.HelpBox(currentTexts.HelpHint, MessageType.Info);
         
-        // [新功能] 结束滚动视图区域
         EditorGUILayout.EndScrollView();
 
         serializedObject.ApplyModifiedProperties();
@@ -129,15 +125,33 @@ public class BatchProcessorWindow : EditorWindow
                 if (source == null) continue;
                 sourceCount++;
 
-                GameObject newInstance;
+                // [重要改动] 开始智能实例化逻辑
+                GameObject prefabAsset = null;
+
+                // 检查源物体是否是一个预制件资产（从项目窗口拖入）或实例（从场景拖入）
                 if (PrefabUtility.IsPartOfPrefabAsset(source))
                 {
-                    newInstance = (GameObject)PrefabUtility.InstantiatePrefab(source, target.transform);
+                    // 情况1: 源是项目文件夹中的预制件资产
+                    prefabAsset = source;
+                }
+                else if (PrefabUtility.IsPartOfAnyPrefab(source))
+                {
+                    // 情况2: 源是场景中的一个预制件实例，我们需要找到它对应的原始资产
+                    prefabAsset = PrefabUtility.GetCorrespondingObjectFromSource(source);
+                }
+
+                GameObject newInstance;
+                if (prefabAsset != null)
+                {
+                    // 如果我们成功找到了预制件资产，就用它来实例化，以保持链接
+                    newInstance = (GameObject)PrefabUtility.InstantiatePrefab(prefabAsset, target.transform);
                 }
                 else
                 {
+                    // 情况3: 源是一个普通的、非预制件的游戏物体，直接克隆它
                     newInstance = Instantiate(source, target.transform);
                 }
+                // [结束重要改动]
                 
                 newInstance.name = source.name;
                 Undo.RegisterCreatedObjectUndo(newInstance, "Create " + newInstance.name);
@@ -183,9 +197,8 @@ public class BatchProcessorWindow : EditorWindow
     private static void InitializeLanguages()
     {
         if (allTexts != null) return;
-
         allTexts = new Dictionary<DisplayLanguage, UITexts>();
-
+        // ... (语言文本部分未变，保持原样) ...
         // English
         allTexts[DisplayLanguage.English] = new UITexts
         {
@@ -203,7 +216,6 @@ public class BatchProcessorWindow : EditorWindow
             ErrorTargetMissing = "Please specify at least one target object!",
             UndoActionName = "Batch Add Children"
         };
-
         // Chinese
         allTexts[DisplayLanguage.Chinese] = new UITexts
         {
@@ -221,7 +233,6 @@ public class BatchProcessorWindow : EditorWindow
             ErrorTargetMissing = "请至少指定一个目标物体！",
             UndoActionName = "批量添加子物体"
         };
-
         // Japanese
         allTexts[DisplayLanguage.Japanese] = new UITexts
         {
@@ -239,7 +250,6 @@ public class BatchProcessorWindow : EditorWindow
             ErrorTargetMissing = "少なくとも1つのターゲットオブジェクトを指定してください！",
             UndoActionName = "子オブジェクトのバッチ追加"
         };
-        
         // Korean
         allTexts[DisplayLanguage.Korean] = new UITexts
         {
